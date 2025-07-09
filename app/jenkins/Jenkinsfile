@@ -1,0 +1,42 @@
+pipeline {
+  agent any
+
+  environment {
+    ACR_LOGIN_SERVER = 'devopsacr984624.azurecr.io'
+    IMAGE_NAME = 'flask-app'
+  }
+
+  stages {
+    stage('Clone Repo') {
+      steps {
+        git 'https://github.com/ronybinoy189/devops-flask-aks.git'
+      }
+    }
+
+    stage('Build Docker Image') {
+      steps {
+        sh 'docker build -t $ACR_LOGIN_SERVER/$IMAGE_NAME:latest ./app'
+      }
+    }
+
+    stage('Push to ACR') {
+      steps {
+        withCredentials([usernamePassword(credentialsId: 'acr-creds', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+          sh """
+            echo $PASSWORD | docker login $ACR_LOGIN_SERVER -u $USERNAME --password-stdin
+            docker push $ACR_LOGIN_SERVER/$IMAGE_NAME:latest
+          """
+        }
+      }
+    }
+
+    stage('Deploy to AKS') {
+      steps {
+        sh '''
+          az aks get-credentials --resource-group devops-rg --name devops-aks
+          kubectl apply -f k8s/
+        '''
+      }
+    }
+  }
+}
